@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>AIRM Drone Command Center</title>
+    <title>AIRM Drone Command</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
@@ -286,7 +286,7 @@
             const handleTabChange = async (tab) => {
                 setActiveTab(tab);
                 if (tab === 'Write Your Own Logic') {
-                    setEditorContent(logicInput); // Show logic input in editor initially
+                    setEditorContent(logicInput);
                 } else {
                     try {
                         const response = await axios.get(`http://localhost:3000/code/${tab}`, { timeout: 5000 });
@@ -367,8 +367,67 @@
 
             const convertLogicToCode = () => {
                 setStatus('Converting...');
-                // Placeholder for conversion logic (to be implemented later)
-                const convertedCode = `# Converted from logic: ${logicInput}\n# Add your converted Python code here`;
+                let convertedCode = `# Converted from logic: ${logicInput}\n`;
+
+                try {
+                    const input = logicInput.toLowerCase().trim();
+                    if (!input) {
+                        throw new Error('No logic provided');
+                    }
+
+                    // Parse conditions
+                    if (input.startsWith('if')) {
+                        const conditionMatch = input.match(/if\s+(.+?),\s*(.+)/);
+                        if (!conditionMatch) {
+                            throw new Error('Invalid condition format. Use: "If [condition], [action]"');
+                        }
+                        const [_, condition, action] = conditionMatch;
+
+                        // Parse condition
+                        let pythonCondition = '';
+                        if (condition.includes('height')) {
+                            const heightMatch = condition.match(/height\s*([><=])\s*(\d+)\s*(meters)?/);
+                            if (heightMatch) {
+                                const [_, operator, value] = heightMatch;
+                                pythonCondition = `height ${operator} ${value}`;
+                            }
+                        } else {
+                            throw new Error('Unsupported variable in condition. Use "height"');
+                        }
+
+                        // Parse action
+                        let pythonAction = '';
+                        if (action.includes('reduce motor speed by')) {
+                            const speedMatch = action.match(/reduce motor speed by\s*(\d+)%/);
+                            if (speedMatch) {
+                                const percentage = parseInt(speedMatch[1]) / 100;
+                                pythonAction = `set_motor_speeds(m1 * ${1 - percentage}, m2 * ${1 - percentage}, m3 * ${1 - percentage}, m4 * ${1 - percentage})`;
+                            }
+                        } else if (action.includes('increase motor speed by')) {
+                            const speedMatch = action.match(/increase motor speed by\s*(\d+)%/);
+                            if (speedMatch) {
+                                const percentage = parseInt(speedMatch[1]) / 100;
+                                pythonAction = `set_motor_speeds(m1 * ${1 + percentage}, m2 * ${1 + percentage}, m3 * ${1 + percentage}, m4 * ${1 + percentage})`;
+                            }
+                        } else if (action.includes('set motor speed to')) {
+                            const speedMatch = action.match(/set motor speed to\s*(\d+)/);
+                            if (speedMatch) {
+                                const value = parseInt(speedMatch[1]);
+                                pythonAction = `set_motor_speeds(${value}, ${value}, ${value}, ${value})`;
+                            }
+                        } else {
+                            throw new Error('Unsupported action. Use "reduce/increase motor speed by X%" or "set motor speed to X"');
+                        }
+
+                        convertedCode += `if ${pythonCondition}:\n    ${pythonAction}`;
+                    } else {
+                        throw new Error('Logic must start with "if"');
+                    }
+
+                } catch (error) {
+                    convertedCode += `# Error: ${error.message}`;
+                }
+
                 const updatedContent = editorContent + (editorContent ? '\n\n' : '') + convertedCode;
                 setEditorContent(updatedContent);
                 if (editorRef.current) {
@@ -381,7 +440,7 @@
             return (
                 <div className="container mx-auto p-6">
                     <h1 className="text-4xl font-bold text-center mb-8 text-[#00FFFF] tracking-wider animate-[pulse_3s_infinite]">
-                        AIRM DRONE COMMAND CENTER
+                        AIRM DRONE COMMAND
                     </h1>
                     <div className="flex flex-col md:flex-row gap-6">
                         <div className="md:w-2/3">
